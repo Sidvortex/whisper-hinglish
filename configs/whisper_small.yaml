@@ -1,0 +1,48 @@
+# Full fine-tune of Whisper-small on Hindi-English code-mixed (Hinglish) speech.
+# One Kaggle T4: ~3-4 h for 4000 steps.
+
+model:
+  name: openai/whisper-small
+  language: hindi            # decoder prompt; code-mixed text keeps English words in Latin script
+  task: transcribe
+  method: full               # full | lora
+
+lora:                        # used only when method: lora
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, out_proj, fc1, fc2]
+
+data:
+  sampling_rate: 16000
+  max_audio_seconds: 30
+  max_label_tokens: 440
+  sources:
+    - name: noisy-hinglish
+      type: hf
+      dataset: addyo07/noisy-hinglish-asr
+      splits: {train: train, eval: val, test: test}
+      audio_column: audio
+      text_column: transcription
+      group_column: language           # used for per-language WER in eval
+      keep: {language: [hinglish, hi, en]}   # drop "neutral" non-speech clips
+    # Add more data, e.g. OpenSLR-104 (MUCS Hindi-English) after running prepare_kaldi.py:
+    # - name: mucs-hi-en
+    #   type: manifest
+    #   splits: {train: data/mucs/train.jsonl, eval: data/mucs/dev.jsonl, test: data/mucs/test.jsonl}
+  max_eval_samples: 400       # WER during training is computed on this many clips
+  seed: 42
+
+train:
+  output_dir: outputs/whisper-small-hinglish
+  max_steps: 4000
+  lr: 1.0e-5
+  warmup_steps: 300
+  batch_size: 16
+  grad_accum: 1
+  eval_batch_size: 16
+  eval_steps: 500
+  save_steps: 500
+  logging_steps: 25
+  num_workers: 2
+  generation_max_length: 225
